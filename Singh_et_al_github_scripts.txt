@@ -1,0 +1,392 @@
+#Scripts for the annotation of D.chrysippus2.2 genome - Singh et al. ***
+
+#annotation of each danaus assembly:
+
+#1. producing a protein dataset - combining broad arthropod set with D. plexippus
+	
+#2. masking the genome using repeatmodeler/masker
+
+#3. carry out annotation with BRAKER2
+
+###########################################################
+#			1. produce protein dataset:
+###########################################################
+#this comprises of two D.plexippus protein sets
+
+#FIRST
+#plexippus proteome set from assembly: GCF_009731565.1
+#https://www.ncbi.nlm.nih.gov/assembly/GCF_009731565.1
+
+grep ">" /data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/uniprot-proteome_UP000596680.fasta | wc -l
+#17926
+
+#SECOND
+#plexippus amino acid protein set from assembly: GCA_018135715.1
+#https://www.ncbi.nlm.nih.gov/assembly/GCA_018135715.1/#/def
+#annotation at: https://zenodo.org/record/4470132#.YRKWDRNKhhE
+#convert extract amino acid sequences into .aa.fasta file
+sconda /ceph/users/amackintosh/.conda/envs/gt/
+
+# tidy up the braker.gff3
+sed 's/:=//g' dplex_mex.gff3 > intermediate.gff3
+sed 's/mstrg/MSTRG/g' intermediate.gff3 > intermediate_upper.gff3
+gt gff3 -sort -tidy -retainids -fixregionboundaries intermediate_upper.gff3 > dplex_mex.tidy.gff3
+
+# extract CDS sequences
+gt extractfeat -type CDS -join -retainids -seqfile dplex_mex.fa -matchdescstart -o dplex_mex.gt.cds.fasta dplex_mex.tidy.gff3
+# extract protein sequences
+gt extractfeat -type CDS -translate -join -retainids -seqfile dplex_mex.fa -matchdescstart -o dplex_mex.gt.aa.fasta dplex_mex.tidy.gff3
+# get stats
+gt stat -genelengthdistri -genescoredistri -exonlengthdistri -exonnumberdistri -intronlengthdistri -cdslengthdistri -o dplex_mex.gt.stats.txt dplex_mex.tidy.gff3
+
+#COMBINE
+cat /data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/uniprot-proteome_UP000596680.fasta ./dplex_mex.gt.aa.fasta > /data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/dplex2_uniprot-proteome_UP000596680_and_dplex_mex.fasta
+
+grep ">" /data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/dplex2_uniprot-proteome_UP000596680_and_dplex_mex.fasta | wc -l
+#35933
+
+
+###########################################################
+#			2. repeat annotation:
+###########################################################
+/ceph/software/utilities/sge/qlogin -pe smp64 64 -N gen_an -l h=bigfoot
+
+mkdir /scratch/rdekayne/repeats
+cd /scratch/rdekayne/repeats
+
+sconda repeats
+
+#build repeat library from chrysippus assembly
+/ceph/software/repeatmodeler/RepeatModeler.v2.0.1/BuildDatabase -name danaus_chrysippus_2.2 -engine ncbi /data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa
+
+/ceph/software/repeatmodeler/RepeatModeler.v2.0.1/RepeatModeler -database danaus_chrysippus_2.2 -pa 50 -LTRStruct
+
+#get other lepidoptera repeats
+perl /ceph/software/repeatmasker/RepeatMasker-4.1.0/util/queryRepeatDatabase.pl -species Lepidoptera | grep -v "Species:" > Lepidoptera.Repbase.repeatmasker
+grep ">" Lepidoptera.Repbase.repeatmasker  | wc -l
+#1253
+
+grep ">" danaus_chrysippus_2.2-families.fa | wc -l
+1653
+
+#combine
+cat Lepidoptera.Repbase.repeatmasker danaus_chrysippus_2.2-families.fa > Lepidoptera_and_danaus_chrysippus2.2.repeatmasker
+grep ">" Lepidoptera_and_danaus_chrysippus2.2.repeatmasker | wc -l
+#2906
+
+#carry out softmasking of assembly for BRAKER2
+cp /data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa .
+#/ceph/software/repeatmasker/RepeatMasker-4.1.0/RepeatMasker -e rmblast -pa 48 -s -lib Lepidoptera_and_danaus_chrysippus2.2.repeatmasker -dir /scratch/rdekayne/annotate/masked_output -xsmall -gff ./Dchry2.2.fa
+
+#get repeat landscape to view expansion of gene families:
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/RepeatMasker -e rmblast -pa 48 -s -a -xsmall -gccalc -lib ./Lepidoptera_and_danaus_chrysippus2.2.repeatmasker ./Dchry2.2.fa
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/util/calcDivergenceFromAlign.pl -s test.divsum Dchry2.2.fa.align
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/util/createRepeatLandscape.pl -div test.divsum -g 354020300 > test_danaus_output.html
+
+#make hardmasked too:
+sed -e '/^>/! s/[[:lower:]]/N/g' Dchry2.2.fa.masked > Dchry2.2.fa.hardmasked
+
+#and now dplex 1
+cp /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dapl_Zhan_v3_HiC.RN.fasta .
+awk 'BEGIN{FS=" "}{if(!/>/){print toupper($0)}else{print $1}}' Dapl_Zhan_v3_HiC.RN.fasta > Dapl_Zhan_v3_HiC.RN.uppercase.fasta
+
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/RepeatMasker -e rmblast -pa 48 -s -a -xsmall -gccalc -lib ./Lepidoptera_and_danaus_chrysippus2.2.repeatmasker ./Dapl_Zhan_v3_HiC.RN.uppercase.fasta
+
+#and now dplex 2
+cp /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.fa .
+awk 'BEGIN{FS=" "}{if(!/>/){print toupper($0)}else{print $1}}' dplex_mex.fa > dplex_mex.uppercase.fa
+
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/RepeatMasker -e rmblast -pa 48 -s -a -xsmall -gccalc -lib ./Lepidoptera_and_danaus_chrysippus2.2.repeatmasker ./dplex_mex.uppercase.fa
+
+
+###########################################################
+#			3. BRAKER2 annotation + tidy:
+###########################################################
+#and annotate with braker gff output inputting the softmasked assembly and the protein set from the two D.plex assemblies
+sconda annotation
+/ceph/software/conda/envs/annotation/bin/braker.pl --cores 48 --gff3 --species=danaus_chrysippus.2.2_braker_a001 --workingdir=/scratch/rdekayne/Dchr_annotation --softmasking --genome=/scratch/rdekayne/repeats/Dchry2.2.fa.masked --prot_seq=/data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/dplex2_uniprot-proteome_UP000596680_and_dplex_mex.fasta --prg=gth --gth2traingenes --trainFromGth
+# tidy up the braker.gff3
+sconda /ceph/users/amackintosh/.conda/envs/gt/
+gt gff3 -sort -tidy -retainids -fixregionboundaries augustus.hints.gff3 > ./Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3
+# extract CDS sequences
+gt extractfeat -type CDS -join -retainids -seqfile /scratch/rdekayne/repeats/Dchry2.2.fa.masked -matchdescstart -o Dchry2.2.fa.masked_annotation_a001.sequences.gt.cds.fasta Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3
+# extract protein sequences
+gt extractfeat -type CDS -translate -join -retainids -seqfile /scratch/rdekayne/repeats/Dchry2.2.fa.masked -matchdescstart -o Dchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3
+# get stats
+gt stat -genelengthdistri -genescoredistri -exonlengthdistri -exonnumberdistri -intronlengthdistri -cdslengthdistri -o Dchry2.2.fa.masked_annotation_a001.sequences.gt.stats.txt Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3
+
+
+#reannotate other assemblies
+sed 's/\;//g' /scratch/rdekayne/repeats/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.masked > /scratch/rdekayne/repeats/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked
+sed -i 's/=//g' /scratch/rdekayne/repeats/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked
+/ceph/software/conda/envs/annotation/bin/braker.pl --cores 48 --gff3 --species=danaus_plexv4_braker_a006 --workingdir=/scratch/rdekayne/Dplex_v4_annotation --softmasking --genome=/scratch/rdekayne/repeats/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked --prot_seq=/data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/dplex2_uniprot-proteome_UP000596680_and_dplex_mex.fasta --prg=gth --gth2traingenes --trainFromGth
+gt gff3 -sort -tidy -retainids -fixregionboundaries augustus.hints.gff3 > ./danaus_plexv4_braker_a006.sequences.tidy.gff3
+# extract CDS sequences
+gt extractfeat -type CDS -join -retainids -seqfile /scratch/rdekayne/repeats/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked -matchdescstart -o danaus_plexv4_braker_a006.sequences.gt.cds.fasta danaus_plexv4_braker_a006.sequences.tidy.gff3
+# extract protein sequences
+gt extractfeat -type CDS -translate -join -retainids -seqfile /scratch/rdekayne/repeats/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked -matchdescstart -o danaus_plexv4_braker_a006.sequences.gt.aa.fasta danaus_plexv4_braker_a006.sequences.tidy.gff3
+# get stats
+gt stat -genelengthdistri -genescoredistri -exonlengthdistri -exonnumberdistri -intronlengthdistri -cdslengthdistri -o danaus_plexv4_braker_a006.sequences.gt.stats.txt danaus_plexv4_braker_a006.sequences.tidy.gff3
+
+
+/ceph/software/conda/envs/annotation/bin/braker.pl --cores 48 --gff3 --species=danaus_plex_mex_braker_a002 --workingdir=/scratch/rdekayne/Dplex_mex_annotation --softmasking --genome=/data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.uppercase.fa.masked --prot_seq=/data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/protein_set/dplex2_uniprot-proteome_UP000596680_and_dplex_mex.fasta --prg=gth --gth2traingenes --trainFromGth
+# tidy up the braker.gff3
+gt gff3 -sort -tidy -retainids -fixregionboundaries augustus.hints.gff3 > ./danaus_plex_mex_braker_a002.sequences.tidy.gff3
+# extract CDS sequences
+gt extractfeat -type CDS -join -retainids -seqfile /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.uppercase.fa.masked -matchdescstart -o danaus_plex_mex_braker_a002.sequences.gt.cds.fasta danaus_plex_mex_braker_a002.sequences.tidy.gff3
+# extract protein sequences
+gt extractfeat -type CDS -translate -join -retainids -seqfile /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.uppercase.fa.masked -matchdescstart -o danaus_plex_mex_braker_a002.sequences.gt.aa.fasta danaus_plex_mex_braker_a002.sequences.tidy.gff3
+# get stats
+gt stat -genelengthdistri -genescoredistri -exonlengthdistri -exonnumberdistri -intronlengthdistri -cdslengthdistri -o danaus_plex_mex_braker_a002.sequences.gt.stats.txt danaus_plex_mex_braker_a002.sequences.tidy.gff3
+
+
+###########################################################
+#			4. genome annotation processing:
+###########################################################
+#get original assemblies
+#tidy dplex_v3/4 assembly:
+rsync -avzP ./Zhan_v3_HiC.deeptools.recoded.gtf qmaster:/data/martin/genomics/analyses/Danaus_genome/MB181_trio/annotation/annotation_verification/
+
+# tidy up the braker.gff3
+gt gtf_to_gff3 Zhan_v3_HiC.deeptools.recoded.gtf > Dplex.gff3
+gt gff3 -sort -tidy -retainids -fixregionboundaries Dplex.gff3 > ./Dplex.tidy.gff3
+# extract CDS sequences
+gt extractfeat -type CDS -join -retainids -seqfile /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dapl_Zhan_v3_HiC.RN.fasta -matchdescstart -o Dplex.tidy.gff3.cds.fasta Dplex.tidy.gff3
+# extract protein sequences
+gt extractfeat -type CDS -translate -join -retainids -seqfile /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dapl_Zhan_v3_HiC.RN.fasta -matchdescstart -o Dplex.tidy.gff3.gt.aa.fasta Dplex.tidy.gff3
+# get stats
+gt stat -genelengthdistri -genescoredistri -exonlengthdistri -exonnumberdistri -intronlengthdistri -cdslengthdistri -o Dplex.tidy.gff3.gt.stats.txt Dplex.tidy.gff3
+
+#add introns to 'original' - 'O' assemblies
+#dplex1
+sed 's/CDS/exon/g' ./Dplex.tidy.gff3 > Dplex.introninput.tidy.gff3
+gt gff3 --addintrons Dplex.introninput.tidy.gff3 > Dplex.introns.tidy.gff3
+gt stat -intronlengthdistri -o Dplex.introns.stats.txt Dplex.introns.tidy.gff3
+
+#dplex2
+gt gff3 --addintrons dplex_mex.tidy.gff3 > dplex_mex.introns.tidy.gff3
+gt stat -intronlengthdistri -o dplex_mex.introns.stats.txt dplex_mex.introns.tidy.gff3
+
+#list of genomes to analyse: genome_files.txt
+/data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/braker_annotation_RDK/danaus_plexv4_braker_a006.sequences.tidy.gff3
+/data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dplex.introns.tidy.gff3
+/data/martin/genomics/analyses/Danaus_genome/Dplex_mex/braker_annotation_RDK/danaus_plex_mex_braker_a002.sequences.tidy.gff3
+/data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.introns.tidy.gff3
+/data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3
+
+#genome_abbs.txt
+dplex_v4_B
+dplex_v4_O
+dplex_mex_B
+dplex_mex_O
+Dchry2_2
+
+#want to 1)extract exons 2)extract introns 3)calculate line counts of exons 4)count lines of introns 5) get mean exon length 6) get mean intron length
+#extract_intron_exon_info.sh
+
+#!/bin/bash
+out_dir=/data/martin/genomics/analyses/Danaus_genome/introns_exons/output
+echo ${out_dir}
+
+for i in {1..5}
+do
+	# define jobindex
+	genome_numb=${i}
+	genome_path=$(cat /data/martin/genomics/analyses/Danaus_genome/introns_exons/genome_files.txt | sed -n ${i}p)
+	genome_name=$(cat /data/martin/genomics/analyses/Danaus_genome/introns_exons/genome_abbs.txt | sed -n ${i}p)
+	echo ${genome_path}
+	echo ${genome_name}
+	
+	#extract introns/exons
+	awk '{ if ($3 == "intron") { print } }' ${genome_path} > ${out_dir}/${genome_name}.introns.gff3
+	awk '{ if ($3 == "exon") { print } }' ${genome_path} > ${out_dir}/${genome_name}.exons.gff3
+	
+	#get lengths of them
+	for j in ${out_dir}/${genome_name}.introns.gff3; do
+    	awk '{ print $5-$4; }' "$j" > ${out_dir}/${genome_name}.introns_length_output.txt ;
+	done
+	for k in ${out_dir}/${genome_name}.exons.gff3; do
+    	awk '{ print $5-$4; }' "$k" > ${out_dir}/${genome_name}.exons_length_output.txt ;
+	done
+	
+	#get means of each
+	echo ${genome_name} > ${out_dir}/${genome_name}.intron_means.txt
+	awk '{ total += $1 } END { print total/NR }'  ${out_dir}/${genome_name}.introns_length_output.txt >> ${out_dir}/${genome_name}.intron_means.txt
+	echo ${genome_name} > ${out_dir}/${genome_name}.exon_means.txt
+	awk '{ total += $1 } END { print total/NR }'  ${out_dir}/${genome_name}.exons_length_output.txt >> ${out_dir}/${genome_name}.exon_means.txt
+
+done
+
+cat ${out_dir}/*.intron_means.txt > ${out_dir}/all_introns.txt
+cat ${out_dir}/*.exon_means.txt > ${out_dir}/all_exons.txt
+
+####
+#out
+####
+rsync qmaster:/data/martin/genomics/analyses/Danaus_genome/introns_exons/output/*_length_output.txt Dropbox/RishiMAC/Danaus/Genome_annotation/introns/auto_intron_exon/ 
+
+#cat all_exons.txt 
+Dchry2_2
+217.307
+dplex_mex_B
+223.69
+dplex_mex_O
+271.062
+dplex_v4_B
+208.024
+dplex_v4_O
+206.286
+
+#cat all_introns.txt 
+Dchry2_2
+1032.27
+dplex_mex_B
+725.857
+dplex_mex_O
+559.891
+dplex_v4_B
+780.619
+dplex_v4_O
+804.666
+
+#now just for our re-annotated assemblies to allow a direct comparison and only using '.t1' genes
+#extract_intron_exon_info_t1.sh
+#!/bin/bash
+out_dir=/data/martin/genomics/analyses/Danaus_genome/introns_exons/t1_only/output
+echo ${out_dir}
+
+for i in {1..3}
+do
+	# define jobindex
+	genome_numb=${i}
+	genome_path=$(cat /data/martin/genomics/analyses/Danaus_genome/introns_exons/t1_only/genome_files.txt | sed -n ${i}p)
+	genome_name=$(cat /data/martin/genomics/analyses/Danaus_genome/introns_exons/t1_only/genome_abbs.txt | sed -n ${i}p)
+	echo ${genome_path}
+	echo ${genome_name}
+	
+	#extract introns/exons
+	awk '{ if ($3 == "intron") { print } }' ${genome_path} | grep ".t1" > ${out_dir}/${genome_name}.introns.gff3
+	awk '{ if ($3 == "exon") { print } }' ${genome_path} | grep ".t1" > ${out_dir}/${genome_name}.exons.gff3
+	
+	#get lengths of them
+	for j in ${out_dir}/${genome_name}.introns.gff3; do
+    	awk '{ print $5-$4; }' "$j" > ${out_dir}/${genome_name}.introns_length_output.txt ;
+	done
+	for k in ${out_dir}/${genome_name}.exons.gff3; do
+    	awk '{ print $5-$4; }' "$k" > ${out_dir}/${genome_name}.exons_length_output.txt ;
+	done
+	
+	#get means of each
+	echo ${genome_name} > ${out_dir}/${genome_name}.intron_means.txt
+	awk '{ total += $1 } END { print total/NR }'  ${out_dir}/${genome_name}.introns_length_output.txt >> ${out_dir}/${genome_name}.intron_means.txt
+	echo ${genome_name} > ${out_dir}/${genome_name}.exon_means.txt
+	awk '{ total += $1 } END { print total/NR }'  ${out_dir}/${genome_name}.exons_length_output.txt >> ${out_dir}/${genome_name}.exon_means.txt
+
+done
+
+cat ${out_dir}/*.intron_means.txt > ${out_dir}/all_introns.txt
+cat ${out_dir}/*.exon_means.txt > ${out_dir}/all_exons.txt
+ 
+####
+#out
+####
+rsync qmaster:/data/martin/genomics/analyses/Danaus_genome/introns_exons/t1_only/output/*_length_output.txt ./t1_only 
+
+#cat all_exons.txt 
+Dchry2_2
+226.447
+dplex_mex_B
+238.272
+dplex_v4_B
+216.605
+
+#cat all_introns.txt 
+Dchry2_2
+974.9
+dplex_mex_B
+665.131
+dplex_v4_B
+737.858
+
+
+
+#######
+#functional annotation with pannzer2:
+#http://ekhidna2.biocenter.helsinki.fi/barcosel/tmp//RD8AUok6TJT/index.html
+#Title:	dchrys2.2
+#Proteins:	19639
+#Database:	
+#uniprot.Jun2021 consisting of 75694734762 letters and 219740214 sequences
+#URL:	http://ekhidna2.biocenter.helsinki.fi/barcosel/tmp//RD8AUok6TJT
+#Checksum:	265bc5d74e09153deda91b41c5e2c45a7c2529193185fbf98ea5c60e
+
+#how many unique genes are annotated
+cut -f1 GO.out | grep ".t1" | sort | uniq | wc -l
+#9567
+#out of 16260 genes 
+
+###########################################################
+#			5. BUSCOs:
+###########################################################
+#busco check on whole assembly and then on proteins:
+#/data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/buscos_G3_paper
+
+conda create -n busco
+sconda busco
+conda install -c bioconda busco
+conda install -c conda-forge parallel
+
+#want buscos for all assemblies and all annotations:
+#busco_input_assemblies.txt
+/data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa.masked
+/data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked
+/data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.uppercase.fa.masked
+
+##and all protein sets:
+#busco_input_proteins.txt
+/data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/Dchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta
+/data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.gt.aa.fasta
+/data/martin/genomics/analyses/Danaus_genome/Dplex_mex/braker_annotation_RDK/danaus_plex_mex_braker_a002.sequences.gt.aa.fasta
+/data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dplex.tidy.gff3.gt.aa.fasta
+/data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/braker_annotation_RDK/danaus_plexv4_braker_a006.sequences.gt.aa.fasta
+
+echo 'busco -m genome -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa.masked -o Dchry2.2.fa.masked.busco_v5.insecta' > busco_g3.command1.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -b yes {}' :::: busco_g3.command1.txt
+echo 'busco -m genome -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked -o Dapl_Zhan_v3_HiC.RN.uppercase.fasta.renamed.masked.busco_v5.insecta' > busco_g3.command2.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -b yes {}' :::: busco_g3.command2.txt
+echo 'busco -m genome -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.uppercase.fa.masked -o test_dplex_mex.uppercase.fa.masked.busco_v5.insecta' > busco_g3.command3.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c2 -b yes {}' :::: busco_g3.command3.txt
+
+echo 'busco -m protein -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/Dchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta -o Dchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta.busco_v5.insecta' > busco_g3.command4.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c2 -b yes {}' :::: busco_g3.command4.txt
+echo 'busco -m protein -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/dplex_mex.gt.aa.fasta -o dplex_mex.gt.aa.fasta.busco_v5.insecta' > busco_g3.command5.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c5 -b yes {}' :::: busco_g3.command5.txt
+echo 'busco -m protein -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/braker_annotation_RDK/danaus_plex_mex_braker_a002.sequences.gt.aa.fasta -o danaus_plex_mex_braker_a002.sequences.gt.aa.fasta.busco_v5.insecta' > busco_g3.command6.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c5 -b yes {}' :::: busco_g3.command6.txt
+echo 'busco -m protein -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/Dplex.tidy.gff3.gt.aa.fasta -o Dplex.tidy.gff3.gt.aa.fasta.busco_v5.insecta' > busco_g3.command7.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c5 -b yes {}' :::: busco_g3.command7.txt
+echo 'busco -m protein -l insecta -c 1 -i /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/braker_annotation_RDK/danaus_plexv4_braker_a006.sequences.gt.aa.fasta -o danaus_plexv4_braker_a006.sequences.gt.aa.fasta.busco_v5.insecta' > busco_g3.command8.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c2 -b yes {}' :::: busco_g3.command8.txt
+
+for file in *.o*
+do
+	echo ${file}
+	echo 'busco - output'
+	grep -A11 "Results from dataset insecta_odb10" ${file}
+done
+
+
+#now test using only the longest transcripts
+#/data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/buscos_G3_paper/longest_transcripts
+grep -A1 ".t1" /data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/Dchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta > ./LONGESTDchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta
+grep -A1 ".t1" /data/martin/genomics/analyses/Danaus_genome/Dplex_mex/braker_annotation_RDK/danaus_plex_mex_braker_a002.sequences.gt.aa.fasta > ./LONGESTdanaus_plex_mex_braker_a002.sequences.gt.aa.fasta
+grep -A1 ".t1" /data/martin/genomics/analyses/Danaus_genome/Dplex_V4_HiC/braker_annotation_RDK/danaus_plexv4_braker_a006.sequences.gt.aa.fasta > ./LONGESTdanaus_plexv4_braker_a006.sequences.gt.aa.fasta
+
+echo 'busco -m protein -l insecta -c 1 -i ./LONGESTDchry2.2.fa.masked_annotation_a001.sequences.gt.aa.fasta -o longest_Dchr2.2.busco_v5.insecta' > busco_g3.command9.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c2 -b yes {}' :::: busco_g3.command9.txt
+echo 'busco -m protein -l insecta -c 1 -i ./LONGESTdanaus_plex_mex_braker_a002.sequences.gt.aa.fasta -o longest_Dplex_mex.busco_v5.insecta' > busco_g3.command10.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c2 -b yes {}' :::: busco_g3.command10.txt
+echo 'busco -m protein -l insecta -c 1 -i ./LONGESTdanaus_plexv4_braker_a006.sequences.gt.aa.fasta -o longest_Dplex_v4.busco_v5.insecta' > busco_g3.command11.txt
+parallel -j 1 'qsub -cwd -N busco -V -pe smp 20 -l h=c2 -b yes {}' :::: busco_g3.command11.txt
+
+
