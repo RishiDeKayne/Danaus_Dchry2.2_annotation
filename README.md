@@ -11,10 +11,10 @@ R script for the analysis of repeats and input file is here:
 `repeat_summaries.csv`
 
 R script for the analysis of intron and exon lengths and input files are here:
-`introns_exons_t1_only.R`
-`Dchry2_2.exons_length_output.txt`
-`Dchry2_2.introns_length_output.txt`
-`dplex_mex_B.exons_length_output.txt`
-`dplex_mex_B.introns_length_output.txt`
-`dplex_v4_B.exons_length_output.txt`
+`introns_exons_t1_only.R`  
+`Dchry2_2.exons_length_output.txt`  
+`Dchry2_2.introns_length_output.txt`  
+`dplex_mex_B.exons_length_output.txt`  
+`dplex_mex_B.introns_length_output.txt`  
+`dplex_v4_B.exons_length_output.txt`  
 `dplex_v4_B.introns_length_output.txt`
