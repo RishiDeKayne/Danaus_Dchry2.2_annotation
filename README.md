@@ -18,3 +18,6 @@ R script for the analysis of intron and exon lengths and input files are here:
 `dplex_mex_B.introns_length_output.txt`  
 `dplex_v4_B.exons_length_output.txt`  
 `dplex_v4_B.introns_length_output.txt`
+
+Commands for the upload of the assembly/annotation/raw Illumina and PacBio reads to ENA:
+`ENA_upload_commands.txt`
