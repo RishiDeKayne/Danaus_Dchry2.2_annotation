@@ -1,0 +1,110 @@
+#uploading the Dchry2.2 assembly/annotatin/raw reads to ENA:
+
+#convert assembly and annotation to EMBL format: https://github.com/NBISweden/EMBLmyGFF3 
+EMBLmyGFF3 ../FILT_Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3 ../../Dchry2.2.fa.masked \
+        --molecule_type 'genomic DNA' \
+        --topology linear \
+        --transl_table 1  \
+        --species 'Danaus chrysippus' \
+        --locus_tag DCHRY22 \
+        --project_id PRJEB47812 \
+        -o Dchry2.2.embl
+        
+gzip Dchry2.2.embl
+cp ../manifest.txt .
+
+#Type Accession Unique Name
+#Study PRJEB47812 ena-STUDY-UNIVERSITY OF EDINBURGH-29-09-2021-10:17:32:403-2010
+
+#Type Accession Unique Name
+#Sample ERS7652079 (SAMEA9973796) Dchry2.2
+
+#manifest.txt:
+STUDY   PRJEB47812
+SAMPLE    ERS7652079
+ASSEMBLYNAME   Dchry2.2
+ASSEMBLY_TYPE isolate
+COVERAGE   191
+PROGRAM   Falcon, Canu
+PLATFORM   Pacbio
+MOLECULETYPE   genomic DNA
+FLATFILE   Dchry2.2.embl.gz
+
+#download webin to cluster
+#validate first:
+java -jar ../webin-cli-4.1.0.jar -username Webin-XXXX -password XXXX -context genome -manifest manifest.txt -validate
+
+#had error from previous validation so removed 'genome' directory and all *.report files and then ran:
+#and then upload:
+java -jar ../webin-cli-4.1.0.jar -username Webin-XXXX -password XXXX -context genome -manifest manifest.txt -submit
+
+#INFO : Your application version is 4.1.0
+#INFO : Kindly note that the ENA helpdesk is running at a lower capacity than usual due to staff absences. As a result, our response time is approximately 3 weeks. We apologise for this delay and thank you for your patience.
+#INFO : Creating report file: /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/filt_upload/./webin-cli.report
+#INFO : Submission has not been validated previously.
+#INFO : The submission has been validated successfully.
+#INFO : Uploading file: /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/filt_upload/Dchry2.2.embl.gz
+
+#INFO : Files have been uploaded to webin2.ebi.ac.uk. 
+#INFO : The submission has been completed successfully. The following analysis accession was assigned to the submission: ERZ3614540
+
+#############
+/ceph/software/utilities/sge/qlogin -pe smp 20 -N ena_upload -l h=c2
+/data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Illumina
+
+#upload raw reads:
+#Sequence read data can be submitted to the European Nucleotide Archive (ENA) using the Webin command line submission interface with -context reads option.
+
+#MB18111_Pacbio.bam
+#files are here: /data/martin/genomics/raw/Danaus_pacbio_Exeter_Jan2019/
+
+ls /data/martin/genomics/raw/Danaus_pacbio_Exeter_Jan2019/*.bam > raw_bams.txt
+
+sconda /ceph/users/smartin/.conda/envs/genomics/
+
+
+samtools merge -@ 64 -O MB18111_Pacbio_Dchry2.2.bam -b /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Pacbio/raw_bams.txt
+samtools sort -T /scratch/rdekayne/bam/MB18111_Pacbio_Dchry2.2.sorted -@ 64 MB18111_Pacbio_Dchry2.2.bam -o MB18111_Pacbio_Dchry2.2.sorted.bam && touch sorted.done
+
+rsync * /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Pacbio/
+
+#manifest.txt
+STUDY PRJEB47812
+SAMPLE ERS7652079
+NAME MB18111_Pacbio_Dchry2.2
+INSTRUMENT Sequel
+LIBRARY_SOURCE GENOMIC
+LIBRARY_SELECTION RANDOM
+LIBRARY_STRATEGY WGS
+BAM MB18111_Pacbio_Dchry2.2.sorted.bam
+
+java -jar ../../webin-cli-4.1.0.jar -username Webin-XXXX -password XXXX -context reads -manifest manifest.txt -validate
+java -jar ../../webin-cli-4.1.0.jar -username Webin-XXXX -password XXXX -context reads -manifest manifest.txt -submit
+
+
+#MB18111_Illumina - manifest.txt
+#files are here: /data/martin/genomics/raw/Novogene_Sep2019_C201SC19060075/MB18111/
+mv MB18111_UKDSW02198-1_HJ2JWDSXX_L3_1.fq.gz MB18111_Illumina_Dchry2.2_read1.fastq.gz
+mv MB18111_UKDSW02198-1_HJ2JWDSXX_L3_2.fq.gz MB18111_Illumina_Dchry2.2_read2.fastq.gz
+
+#manifest.txt
+STUDY PRJEB47812
+SAMPLE ERS7652079
+NAME MB18111_Illumina_Dchry2.2
+INSTRUMENT  Illumina NovaSeq 6000
+INSERT_SIZE 350
+LIBRARY_SOURCE GENOMIC
+LIBRARY_SELECTION RANDOM
+LIBRARY_STRATEGY WGS
+FASTQ MB18111_Illumina_Dchry2.2_read1.fastq.gz
+FASTQ MB18111_Illumina_Dchry2.2_read2.fastq.gz 
+
+#and again validate 
+cd /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Illumina
+java -jar ../../webin-cli-4.1.0.jar -username Webin-XXXX -password XXXX -context reads -manifest manifest.txt -validate
+
+#and submit
+java -jar ../../webin-cli-4.1.0.jar -username Webin-XXXX -password XXXX -context reads -manifest manifest.txt -submit
+
+#INFO : The submission has been completed successfully. The following experiment accession was assigned to the submission: ERX6531356
+#INFO : The submission has been completed successfully. The following run accession was assigned to the submission: ERR6909087
