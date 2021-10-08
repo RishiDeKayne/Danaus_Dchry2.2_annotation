@@ -1,4 +1,5 @@
 #uploading the Dchry2.2 assembly/annotatin/raw reads to ENA:
+#first register project and sample interactively (only one sample since all raw data is from a single individual)
 
 #convert assembly and annotation to EMBL format: https://github.com/NBISweden/EMBLmyGFF3 
 EMBLmyGFF3 ../FILT_Dchry2.2.fa.masked_annotation_a001.sequences.tidy.gff3 ../../Dchry2.2.fa.masked \
