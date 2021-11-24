@@ -83,6 +83,13 @@ cp /data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa .
 /ceph/software/repeatmasker/RepeatMasker-4.1.0/util/calcDivergenceFromAlign.pl -s test.divsum Dchry2.2.fa.align
 /ceph/software/repeatmasker/RepeatMasker-4.1.0/util/createRepeatLandscape.pl -div test.divsum -g 354020300 > test_danaus_output.html
 
+#run again without CpG i.e. using -noCpGMod (addressing reviewer comment)
+cp Dchry2.2.fa.align /data/martin/genomics/analyses/Danaus_genome/Dchry2/braker_annotation_RDK_Dchry2_2/repeatlandscape_review
+
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/util/calcDivergenceFromAlign.pl -s test2.divsum -noCpGMod Dchry2.2.fa.align
+/ceph/software/repeatmasker/RepeatMasker-4.1.0/util/createRepeatLandscape.pl -div test2.divsum -g 354020300 > test_danaus_output2.html
+#use this output .html for plotting
+
 #make hardmasked too:
 sed -e '/^>/! s/[[:lower:]]/N/g' Dchry2.2.fa.masked > Dchry2.2.fa.hardmasked
 
