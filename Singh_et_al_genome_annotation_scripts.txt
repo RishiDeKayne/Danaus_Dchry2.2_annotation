@@ -401,6 +401,6 @@ sconda /ceph/users/amackintosh/.conda/envs/assembly
 seqtk mergepe /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Illumina/MB18111_Illumina_Dchry2.2_read1.fastq.gz /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Illumina/MB18111_Illumina_Dchry2.2_read2.fastq.gz | gzip > merged_interleaved_MB18111.fq.gz
 
 sconda ceph/users/amackintosh/.conda/envs/merqury/
-meryl count k=21 memory=100 threads=16 output Dchry2.2.meryl ./merged_interleaved_MB18111.fq.gz
+meryl count k=21 memory=100 threads=16 output reads.meryl ./merged_interleaved_MB18111.fq.gz
 
-$MERQURY/merqury.sh Dchry2.2.meryl /data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa Dchry2.2_QV > Dchry2.2_QV.log
+$MERQURY/merqury.sh reads.meryl /data/martin/genomics/analyses/Danaus_genome/Dchry2/Dchry2.2.fa Dchry2.2_QV > Dchry2.2_QV.log
