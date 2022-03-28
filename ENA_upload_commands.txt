@@ -67,6 +67,11 @@ sconda /ceph/users/smartin/.conda/envs/genomics/
 samtools merge -@ 64 -O MB18111_Pacbio_Dchry2.2.bam -b /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Pacbio/raw_bams.txt
 samtools sort -T /scratch/rdekayne/bam/MB18111_Pacbio_Dchry2.2.sorted -@ 64 MB18111_Pacbio_Dchry2.2.bam -o MB18111_Pacbio_Dchry2.2.sorted.bam && touch sorted.done
 
+#try in one go:
+sconda /ceph/users/amackintosh/.conda/envs/pacbio/
+
+pbmerge -o MB18111_Pacbio_Dchry2.2.pacbio.bam /data/martin/genomics/raw/Danaus_pacbio_Exeter_Jan2019/*.bam
+
 rsync * /data/martin/genomics/analyses/Danaus_genome/Dchry2/ENA_upload/raw_reads/Pacbio/
 
 #manifest.txt
